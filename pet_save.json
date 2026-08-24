@@ -1,0 +1,59 @@
+{
+  "pet": {
+    "name": "BOB",
+    "species": "Pussy",
+    "current_location_id": "house",
+    "hunger": 75,
+    "happiness": 50,
+    "energy": 50,
+    "mood": "Hungry",
+    "memories": [
+      "Woke up for the first time as a Pussy named BOB in the House."
+    ]
+  },
+  "world": {
+    "locations": {
+      "house": {
+        "id": "house",
+        "name": "Inside House",
+        "description": "A cozy shelter with wooden floors.",
+        "exits": {
+          "east": "garden"
+        },
+        "objects": [
+          "food_bowl",
+          "bed"
+        ]
+      },
+      "garden": {
+        "id": "garden",
+        "name": "Garden",
+        "description": "A sunny patch of green grass with wild flowers.",
+        "exits": {
+          "west": "house"
+        },
+        "objects": []
+      }
+    },
+    "objects": {
+      "food_bowl": {
+        "id": "food_bowl",
+        "name": "Food Bowl",
+        "description": "A ceramic bowl filled with pet food.",
+        "location_id": "house",
+        "available_actions": [
+          "eat"
+        ]
+      },
+      "bed": {
+        "id": "bed",
+        "name": "Comfy Bed",
+        "description": "A plush cushion bed.",
+        "location_id": "house",
+        "available_actions": [
+          "sleep"
+        ]
+      }
+    }
+  }
+}
