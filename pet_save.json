@@ -1,14 +1,21 @@
 {
   "pet": {
-    "name": "BOB",
-    "species": "Pussy",
+    "name": "NewBlob",
+    "species": "Digital Slime",
     "current_location_id": "house",
-    "hunger": 75,
-    "happiness": 50,
-    "energy": 50,
-    "mood": "Hungry",
+    "hunger": 0,
+    "happiness": 86,
+    "energy": 46,
+    "mood": "Joyful",
+    "ascii_art": "  ____  \\n |    |\\n | o  |\\n |____|\\n   ||",
     "memories": [
-      "Woke up for the first time as a Pussy named BOB in the House."
+      "Woke up for the first time as a Digital Slime named NewBlob in the House.",
+      "Ate food from the bowl in Inside House.",
+      "Noticed a new area opened up to the east: forest.",
+      "Ate food from the bowl in Inside House.",
+      "Ate food from the bowl in Inside House.",
+      "Noticed a new area opened up to the north: living room.",
+      "Ate food from the bowl in Inside House."
     ]
   },
   "world": {
@@ -18,9 +25,14 @@
         "name": "Inside House",
         "description": "A cozy shelter with wooden floors.",
         "exits": {
-          "east": "garden"
+          "east": "forest",
+          "north": "house_livingroom"
         },
         "objects": [
+          "food_bowl",
+          "bed",
+          "food_bowl",
+          "bed",
           "food_bowl",
           "bed"
         ]
@@ -31,6 +43,24 @@
         "description": "A sunny patch of green grass with wild flowers.",
         "exits": {
           "west": "house"
+        },
+        "objects": []
+      },
+      "forest": {
+        "id": "forest",
+        "name": "forest",
+        "description": "forest to east of house",
+        "exits": {
+          "west": "house"
+        },
+        "objects": []
+      },
+      "house_livingroom": {
+        "id": "house_livingroom",
+        "name": "living room",
+        "description": "inside of house",
+        "exits": {
+          "south": "house"
         },
         "objects": []
       }

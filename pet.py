@@ -1,21 +1,16 @@
+# This File containst the logic with all of the terminal functionality stripped away so that it can act as an import module for tui.py
+
+
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Dict, List, Literal, Optional, Union
 import json
 import os
-import sys
 import instructor
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-# Updated to use openai/gpt-oss-20b
 MODEL_NAME = "openai/gpt-oss-20b"
 SAVE_FILE = "pet_save.json"
-
-
-# ==========================================
-# 1. CORE SIMULATION ENGINE & MEMORY
-# ==========================================
 
 @dataclass
 class WorldObject:
@@ -25,15 +20,13 @@ class WorldObject:
     location_id: str
     available_actions: List[str]
 
-
 @dataclass
 class Location:
     id: str
     name: str
     description: str
-    exits: Dict[str, str] = field(default_factory=dict)  # direction -> target_location_id
+    exits: Dict[str, str] = field(default_factory=dict)
     objects: List[str] = field(default_factory=list)
-
 
 class WorldMap:
     def __init__(self):
@@ -54,7 +47,6 @@ class WorldMap:
             if opposite_direction:
                 self.locations[loc2_id].exits[opposite_direction] = loc1_id
 
-
 @dataclass
 class Pet:
     name: str
@@ -64,12 +56,15 @@ class Pet:
     happiness: int = 50
     energy: int = 50
     mood: str = "Hungry"
+    ascii_art: str = r"""
+ /\_/\  
+( o.o ) 
+/>  < \
+"""
     memories: List[str] = field(default_factory=list)
 
     def add_memory(self, event_description: str):
-        """Append an event to the pet's episodic memory log."""
         self.memories.append(event_description)
-        # Retain top 15 most recent memories to prevent context bloat
         if len(self.memories) > 15:
             self.memories.pop(0)
 
@@ -88,7 +83,6 @@ class Pet:
         else:
             self.mood = "Neutral"
 
-
 class SimulationEngine:
     def __init__(self, pet: Pet, world: WorldMap):
         self.pet = pet
@@ -100,8 +94,7 @@ class SimulationEngine:
         self.pet.energy -= 1
         self.pet.clamp_stats()
         self.pet.update_mood()
-        msg = "Time passed. Vitals naturally decayed."
-        return msg
+        return "Time passed. Vitals naturally decayed."
 
     def move(self, direction: str) -> str:
         current_loc = self.world.locations[self.pet.current_location_id]
@@ -153,10 +146,8 @@ class SimulationEngine:
 
         new_loc = Location(id=loc_id, name=name, description=description)
         self.world.add_location(new_loc)
-
         opposites = {"north": "south", "south": "north", "east": "west", "west": "east"}
         opp_dir = opposites.get(direction)
-
         self.world.connect_locations(connect_to_id, direction, loc_id, opp_dir)
         res = f"World updated: Created '{name}' to the {direction} of {connect_to_id}."
         self.pet.add_memory(f"Noticed a new area opened up to the {direction}: {name}.")
@@ -173,12 +164,8 @@ class SimulationEngine:
             }
             for obj_id in current_loc.objects
         ]
-
         return {
-            "identity": {
-                "name": self.pet.name,
-                "species": self.pet.species,
-            },
+            "identity": {"name": self.pet.name, "species": self.pet.species},
             "vitals": {
                 "hunger": self.pet.hunger,
                 "happiness": self.pet.happiness,
@@ -195,48 +182,36 @@ class SimulationEngine:
             "objects_in_room": objects_in_room,
         }
 
-
-# ==========================================
-# 2. STRUCTURED TOOL DEFINITIONS (PYDANTIC)
-# ==========================================
-
 class MoveAction(BaseModel):
-    """Move to an adjacent location using an available exit direction."""
-    direction: str = Field(..., description="Direction to move (e.g. 'east', 'west', 'north', 'south')")
+    direction: str = Field(..., description="Direction to move")
 
 class InteractAction(BaseModel):
-    """Interact with an object present in the current room."""
-    object_id: str = Field(..., description="The ID of the object to interact with")
-    action: str = Field(..., description="The specific action to perform on the object")
+    object_id: str = Field(..., description="The ID of the object")
+    action: str = Field(..., description="The specific action to perform")
 
 class WaitAction(BaseModel):
-    """Do nothing and rest or explore thoughts for a turn."""
     reason: str = Field(..., description="Why the pet decides to do nothing")
 
 class PetDecision(BaseModel):
-    """The complete decision-making output from the Pet LLM."""
     internal_thought: str = Field(..., description="Inner monologue evaluating needs, memories, and environment.")
     dialogue: Optional[str] = Field(None, description="Optional verbal remark or sound made out loud by the pet.")
+    ascii_art: str = Field(
+        ..., 
+        description="A 3-5 line ASCII drawing of the pet. Use standard text characters. Do NOT use unescaped single backslashes."
+    )
     action: Union[MoveAction, InteractAction, WaitAction] = Field(..., description="The concrete physical action chosen.")
-
-
+    
 class SpawnLocationAction(BaseModel):
-    """Create a new region in the world in response to user requests."""
-    loc_id: str = Field(..., description="Unique snake_case identifier for the location (e.g., 'mysterious_lake')")
-    name: str = Field(..., description="Display name of the location")
-    description: str = Field(..., description="Vivid sensory description of the new area")
-    direction: Literal["north", "south", "east", "west"] = Field(..., description="Direction relative to pet's current area")
-
-
-# ==========================================
-# 3. LLM AGENT ROUTINES
-# ==========================================
+    loc_id: str = Field(...)
+    name: str = Field(...)
+    description: str = Field(...)
+    direction: Literal["north", "south", "east", "west"] = Field(...)
 
 class PetAgent:
     def __init__(self, client: instructor.Instructor):
         self.client = client
 
-    def perceive_and_act(self, engine: SimulationEngine) -> str:
+    def perceive_and_act(self, engine: SimulationEngine) -> tuple[str, str, Optional[str]]:
         perception = engine.get_perception()
 
         system_prompt = f"""
@@ -244,51 +219,42 @@ You are the brain of {engine.pet.name}, a living autonomous digital {engine.pet.
 You make decisions based on your physical vitals, recent memories, current room, visible objects, and available exits.
 
 Rules:
-1. Act according to your species characteristics and current mood.
+1. Act according to your species ({engine.pet.species}) characteristics and current mood.
 2. Prioritize critical needs: high hunger requires finding food, low energy requires sleep.
-3. Use your 'recent_memories' to avoid repeating failed actions and maintain long-term goal continuity.
-4. You can ONLY interact with objects in your current room.
-5. You can ONLY move through directions listed under 'available_exits'.
+3. Express your current state in `ascii_art` using a semi-compact 3-5 line ASCII drawing. Keep width under 20 characters. 
+   IMPORTANT: Ensure all newline breaks inside `ascii_art` are standard '\\n' strings.
 """
-
-        user_prompt = f"Current Perception State:\n{json.dumps(perception, indent=2)}"
-
         decision: PetDecision = self.client.chat.completions.create(
             model=MODEL_NAME,
             response_model=PetDecision,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {"role": "user", "content": f"Current Perception State:\n{json.dumps(perception, indent=2)}"},
             ],
             temperature=0.7,
         )
 
-        print(f"\n[{engine.pet.name}'s Monologue]: {decision.internal_thought}")
-        if decision.dialogue:
-            print(f"{engine.pet.name}: \"{decision.dialogue}\"")
-
         if isinstance(decision.action, MoveAction):
-            return engine.move(decision.action.direction)
+            res = engine.move(decision.action.direction)
         elif isinstance(decision.action, InteractAction):
-            return engine.interact_with_object(decision.action.object_id, decision.action.action)
+            res = engine.interact_with_object(decision.action.object_id, decision.action.action)
         elif isinstance(decision.action, WaitAction):
-            msg = f"{engine.pet.name} waited: {decision.action.reason}"
+            res = f"{engine.pet.name} waited: {decision.action.reason}"
             engine.pet.add_memory(f"Waited in {engine.world.locations[engine.pet.current_location_id].name}.")
-            return msg
-        return "No valid action executed."
+        else:
+            res = "No action executed."
 
+        engine.pet.ascii_art = decision.ascii_art
+
+        return decision.internal_thought, res, decision.dialogue
 
 class EnvironmentAgent:
     def __init__(self, client: instructor.Instructor):
         self.client = client
 
     def modify_world(self, user_command: str, engine: SimulationEngine) -> str:
-        system_prompt = """
-You are the God/World Engine of a digital simulation.
-Translate the user's natural language creation request into a valid world modification API call.
-Target location is the pet's current location.
-"""
-        user_prompt = f"Pet's current location ID: {engine.pet.current_location_id}\nUser Command: {user_command}"
+        system_prompt = "Translate user creation request to world modification API."
+        user_prompt = f"Pet location: {engine.pet.current_location_id}\nCommand: {user_command}"
 
         action: SpawnLocationAction = self.client.chat.completions.create(
             model=MODEL_NAME,
@@ -308,11 +274,6 @@ Target location is the pet's current location.
             direction=action.direction,
         )
 
-
-# ==========================================
-# 4. SAVE / LOAD PERSISTENCE SYSTEM
-# ==========================================
-
 def save_game(engine: SimulationEngine):
     data = {
         "pet": {
@@ -323,6 +284,7 @@ def save_game(engine: SimulationEngine):
             "happiness": engine.pet.happiness,
             "energy": engine.pet.energy,
             "mood": engine.pet.mood,
+            "ascii_art": engine.pet.ascii_art,
             "memories": engine.pet.memories,
         },
         "world": {
@@ -351,11 +313,9 @@ def save_game(engine: SimulationEngine):
     with open(SAVE_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-
 def load_game() -> Optional[SimulationEngine]:
     if not os.path.exists(SAVE_FILE):
         return None
-
     try:
         with open(SAVE_FILE, "r") as f:
             data = json.load(f)
@@ -388,29 +348,20 @@ def load_game() -> Optional[SimulationEngine]:
             happiness=pet_data["happiness"],
             energy=pet_data["energy"],
             mood=pet_data["mood"],
+            ascii_art=pet_data.get("ascii_art", r"""
+ /\_/\  
+( o.o ) 
+/>  < \
+"""),
             memories=pet_data.get("memories", []),
         )
 
         return SimulationEngine(pet, world)
-    except Exception as e:
-        print(f"Warning: Could not load save file ({e}). Starting fresh.")
+    except Exception:
         return None
 
-
-def create_new_world() -> SimulationEngine:
-    print("\n=== WELCOME TO DAEMONAGOTCHI ===")
-    print("Creating a new pet profile...\n")
-
-    name = input("Enter a name for your pet: ").strip()
-    if not name:
-        name = "Blob"
-
-    species = input("Enter your pet's species (e.g., Cyber Dragon, Fluffy Cat, Slime): ").strip()
-    if not species:
-        species = "Digital Slime"
-
+def create_default_world(name: str = "Blob", species: str = "Digital Slime") -> SimulationEngine:
     world = WorldMap()
-
     house = Location("house", "Inside House", "A cozy shelter with wooden floors.")
     garden = Location("garden", "Garden", "A sunny patch of green grass with wild flowers.")
     world.add_location(house)
@@ -428,98 +379,3 @@ def create_new_world() -> SimulationEngine:
     engine = SimulationEngine(pet, world)
     save_game(engine)
     return engine
-
-
-# ==========================================
-# 5. MAIN APPLICATION LOOP
-# ==========================================
-
-def main():
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        print("Error: GROQ_API_KEY environment variable is missing.")
-        print('Run: export GROQ_API_KEY="your_key_here" before running pet.py')
-        sys.exit(1)
-
-    client = instructor.from_openai(
-        OpenAI(
-            base_url="https://api.groq.com/openai/v1",
-            api_key=api_key,
-        ),
-        mode=instructor.Mode.JSON,
-    )
-
-    # Try loading existing save; if not found, trigger initialization prompt
-    engine = load_game()
-    if not engine:
-        engine = create_new_world()
-
-    pet_agent = PetAgent(client)
-    env_agent = EnvironmentAgent(client)
-
-    print(f"\n=== DAEMONAGOTCHI ENGINE ACTIVE ({engine.pet.name} the {engine.pet.species}) ===")
-    print("Type 'step' to trigger pet autonomous decision loop.")
-    print("Type 'create <description>' to alter the world (e.g. 'create a dark forest to the north').")
-    print("Type 'status' to check stats & memories.")
-    print("Type 'reset' or 'clear' to wipe save data and start over.")
-    print("Type 'exit' to quit.\n")
-
-    while True:
-        try:
-            cmd = input("\n> ").strip()
-            if not cmd:
-                continue
-
-            if cmd.lower() in ("exit", "quit"):
-                save_game(engine)
-                print("Progress saved. Goodbye!")
-                break
-
-            elif cmd.lower() in ("reset", "clear"):
-                confirm = input("Are you sure you want to delete this pet and world data? (y/N): ").strip().lower()
-                if confirm == "y":
-                    if os.path.exists(SAVE_FILE):
-                        os.remove(SAVE_FILE)
-                    print("Save file deleted.")
-                    engine = create_new_world()
-                    print(f"\n=== DAEMONAGOTCHI ENGINE ACTIVE ({engine.pet.name} the {engine.pet.species}) ===")
-
-            elif cmd.lower() == "step":
-                engine.tick()
-                result = pet_agent.perceive_and_act(engine)
-                print(f"[World Result]: {result}")
-                save_game(engine)
-
-            elif cmd.lower().startswith("create "):
-                user_req = cmd[7:]
-                result = env_agent.modify_world(user_req, engine)
-                print(f"[World Engine]: {result}")
-                save_game(engine)
-
-            elif cmd.lower() == "status":
-                p = engine.pet
-                print(f"\n--- {p.name}'s Status ({p.species}) ---")
-                print(f"Location:  {engine.world.locations[p.current_location_id].name}")
-                print(f"Hunger:    {p.hunger}/100")
-                print(f"Energy:    {p.energy}/100")
-                print(f"Happiness: {p.happiness}/100")
-                print(f"Mood:      {p.mood}")
-                print("\nRecent Memories:")
-                if p.memories:
-                    for i, mem in enumerate(p.memories, 1):
-                        print(f"  {i}. {mem}")
-                else:
-                    print("  (No memories yet)")
-
-            else:
-                print("Unknown command. Options: 'step', 'create <prompt>', 'status', 'reset', 'exit'")
-
-        except Exception as e:
-            print(f"Error: {e}")
-
-
-if __name__ == "__main__":
-    main()
-
-
-    
