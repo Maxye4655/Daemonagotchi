@@ -1,0 +1,4 @@
+instructor==1.15.4
+openai==2.54.0
+pydantic==2.13.4
+textual==8.2.8
