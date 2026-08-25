@@ -34,7 +34,7 @@ on [Textual](https://github.com/Textualize/textual).
 ## Requirements
 
 - Python 3.9+ (developed on 3.14)
-- A [Groq API key](https://console.groq.com/keys)
+- A [Groq API key](https://console.groq.com/keys), Sign in, generate your key and then use it during the setup process.
 
 ## Setup
 
@@ -47,7 +47,7 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
 
-export GROQ_API_KEY="your-key-here"   # Windows: set GROQ_API_KEY=your-key-here
+export GROQ_API_KEY="your-key-here"   # <---- put your groq api key here, for Windows use: set GROQ_API_KEY=your-key-here
 
 python tui.py
 ```
