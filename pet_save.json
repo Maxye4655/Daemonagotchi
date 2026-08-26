@@ -1,0 +1,66 @@
+{
+  "pet": {
+    "name": "pet",
+    "species": "cat",
+    "current_location_id": "house",
+    "hunger": 0,
+    "happiness": 77,
+    "energy": 47,
+    "mood": "Content",
+    "ascii_art": "/\\_/\\\n( o.o )\n > ^ <",
+    "memories": [
+      "Woke up for the first time as a cat named pet in the House.",
+      "Ate food from the bowl in Inside House.",
+      "Thought: Hunger is high, need to eat food bowl. | Action: pet ate food from the bowl. Hunger satisfied!",
+      "Ate food from the bowl in Inside House.",
+      "Thought: Hungry, time to eat. | Action: pet ate food from the bowl. Hunger satisfied!",
+      "Ate food from the bowl in Inside House.",
+      "Thought: Hunger is high, need to eat food bowl. | Action: pet ate food from the bowl. Hunger satisfied!"
+    ]
+  },
+  "world": {
+    "locations": {
+      "house": {
+        "id": "house",
+        "name": "Inside House",
+        "description": "A cozy shelter with wooden floors.",
+        "exits": {
+          "east": "garden"
+        },
+        "objects": [
+          "food_bowl",
+          "bed"
+        ]
+      },
+      "garden": {
+        "id": "garden",
+        "name": "Garden",
+        "description": "A sunny patch of green grass with wild flowers.",
+        "exits": {
+          "west": "house"
+        },
+        "objects": []
+      }
+    },
+    "objects": {
+      "food_bowl": {
+        "id": "food_bowl",
+        "name": "Food Bowl",
+        "description": "A ceramic bowl filled with pet food.",
+        "location_id": "house",
+        "available_actions": [
+          "eat"
+        ]
+      },
+      "bed": {
+        "id": "bed",
+        "name": "Comfy Bed",
+        "description": "A plush cushion bed.",
+        "location_id": "house",
+        "available_actions": [
+          "sleep"
+        ]
+      }
+    }
+  }
+}

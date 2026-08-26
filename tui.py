@@ -1,21 +1,14 @@
 import os
+from datetime import datetime
 from functools import partial
 
 import instructor
 from openai import OpenAI
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import (
-    Button,
-    Footer,
-    Header,
-    Input,
-    ProgressBar,
-    RichLog,
-    Static,
-)
+from textual.widgets import Button, Input, RichLog, Static
 from textual.worker import Worker, WorkerState
 
 from pet import (
@@ -27,40 +20,81 @@ from pet import (
     SAVE_FILE,
 )
 
+AMBER = "#ffb454"
+DIM = "#8a7a63"
+OK = "#a9dc76"
+WARN = "#ffd866"
+BAD = "#ff5c57"
+
+MOOD_COLORS = {
+    "Starving": BAD,
+    "Lonely": BAD,
+    "Exhausted": WARN,
+    "Hungry": WARN,
+}
+
+GAUGE_WIDTH = 20
+
+
+def render_gauge(label: str, value: int) -> str:
+    filled = round(value / 100 * GAUGE_WIDTH)
+
+    if value >= 70:
+        color = OK
+    elif value >= 40:
+        color = WARN
+    else:
+        color = BAD
+
+    bar = "█" * filled + "░" * (GAUGE_WIDTH - filled)
+
+    return f"{label:<9}[{color}]{bar}[/] [dim]{value:>3}%[/]"
+
 
 class PetSetupScreen(ModalScreen[tuple[str, str] | None]):
-    """Collect the pet identity during the first launch."""
+    """First-run dialog to choose a name and species."""
 
     CSS = """
     PetSetupScreen {
         align: center middle;
+        background: #100d0a;
     }
 
     #setup-dialog {
-        width: 52;
+        width: 56;
         height: auto;
-        border: double #ffffff;
-        background: #000000;
-        padding: 2;
+        border: round #ffb454;
+        background: #1c1712;
+        padding: 1 2;
     }
 
     #setup-dialog Input {
         margin-top: 1;
+        height: 3;
+        border: none;
+        background: transparent;
     }
 
     #setup-dialog Button {
         margin-top: 1;
         width: 100%;
+        background: #ffb454;
+        color: #14100c;
+        text-style: bold;
+    }
+
+    #setup-dialog Button:hover {
+        background: #ffd866;
     }
     """
 
     def compose(self) -> ComposeResult:
         with Vertical(id="setup-dialog"):
-            yield Static("FIRST LIFE INITIALIZATION", classes="section-title")
-            yield Static("Choose a name and species for your pet.")
+            yield Static(f"[bold {AMBER}]FIRST LIFE INITIALIZATION[/]")
+            yield Static(f"[{DIM}]Name your pet and choose its species.[/]")
             yield Input(placeholder="Pet name", id="setup-name")
             yield Input(placeholder="Pet species", id="setup-species")
-            yield Button("Create pet", variant="primary", id="create-pet")
+            yield Button("Wake it up", id="create-pet")
 
     def on_mount(self) -> None:
         self.query_one("#setup-name", Input).focus()
@@ -77,50 +111,35 @@ class PetSetupScreen(ModalScreen[tuple[str, str] | None]):
 
 
 class DaemonagotchiApp(App):
-    """
-    Main Textual interface for Daemonagotchi.
-
-    The simulation and AI logic live in pet.py.
-    This file is responsible only for presentation and input.
-    """
+    """Presentation layer; simulation and AI live in pet.py."""
 
     TITLE = "DAEMONAGOTCHI"
-    SUB_TITLE = "A DIGITAL LIFE SIMULATION"
 
     CSS = """
-    /* ============================================================
-       GLOBAL
-       ============================================================ */
-
     Screen {
-        background: #000000;
-        color: #ffffff;
+        background: #14100c;
+        color: #e8dcc0;
     }
 
-    #game,
-    #left-column,
-    #center-column,
-    #right-column,
-    #world-view,
-    #event-log,
-    #memory-log {
-        scrollbar-size: 0 0;
+    #titlebar {
+        dock: top;
+        height: 3;
+        padding: 0 2;
+        background: #1c1712;
+        border-bottom: solid #3d3226;
     }
 
-    Header {
-        background: #000000;
-        color: #ffffff;
-        height: 1;
+    #app-title {
+        width: auto;
+        color: #ffb454;
+        text-style: bold;
     }
 
-    Footer {
-        background: #000000;
-        color: #aaaaaa;
+    #titlebar-info {
+        width: 1fr;
+        text-align: right;
+        color: #8a7a63;
     }
-
-    /* ============================================================
-       MAIN LAYOUT
-       ============================================================ */
 
     #game {
         height: 1fr;
@@ -128,189 +147,92 @@ class DaemonagotchiApp(App):
     }
 
     #left-column {
-        width: 32%;
+        width: 40;
         height: 100%;
-        border: solid #666666;
         padding: 1;
     }
-
-    #center-column {
-        width: 43%;
-        height: 100%;
-        border-top: solid #666666;
-        border-bottom: solid #666666;
-        padding: 1;
-    }
-
-    #right-column {
-        width: 25%;
-        height: 100%;
-        border: solid #666666;
-        padding: 1;
-    }
-
-    /* ============================================================
-       SECTION HEADERS
-       ============================================================ */
-
-    .section-title {
-        width: 100%;
-        height: 1;
-        color: #ffffff;
-        text-style: bold;
-        background: #222222;
-        padding-left: 1;
-        margin-bottom: 1;
-    }
-
-    .subtle {
-        color: #888888;
-    }
-
-    /* ============================================================
-       PET VIEW
-       ============================================================ */
 
     #ascii-frame {
-        height: 12;
-        width: 100%;
-        border: double #ffffff;
-        background: #000000;
-        color: #ffffff;
+        height: 11;
+        border: round #3d3226;
+        background: #100d0a;
         content-align: center middle;
-        margin-bottom: 1;
-    }
-
-    #pet-name {
-        height: 1;
-        width: 100%;
-        text-align: center;
         text-style: bold;
-        color: #ffffff;
     }
 
-    #pet-description {
-        height: 2;
-        width: 100%;
-        text-align: center;
-        color: #999999;
-        margin-bottom: 1;
-    }
-
-    /* ============================================================
-       STATS
-       ============================================================ */
-
-    .stat-name {
+    .gauge {
         height: 1;
-        color: #bbbbbb;
         margin-top: 1;
     }
 
-    ProgressBar {
-        height: 1;
-        width: 100%;
-        color: #ffffff;
-        background: #222222;
+    #status-box {
+        margin-top: 1;
+        padding: 0 2;
+        border-left: thick #ffb454;
+        background: #1c1712;
+        color: #8a7a63;
     }
 
-    ProgressBar > .bar--complete {
-        color: #ffffff;
-        background: #ffffff;
+    #center-column {
+        width: 1fr;
+        height: 100%;
+        padding: 1 0 1 1;
     }
 
-    ProgressBar > .bar--indeterminate {
-        color: #ffffff;
-        background: #ffffff;
-    }
-
-    /* ============================================================
-       WORLD VIEW
-       ============================================================ */
-
-    #world-view {
-        height: 1fr;
-        width: 100%;
-        border: solid #444444;
-        background: #000000;
-        padding: 1;
+    #world-panel {
+        height: 42%;
+        border: round #3d3226;
+        background: #100d0a;
+        padding: 0 2;
     }
 
     #world-map {
         height: 1fr;
-        width: 100%;
-        color: #ffffff;
-    }
-
-    #location-info {
-        height: 7;
-        width: 100%;
-        border-top: solid #333333;
-        margin-top: 1;
-        padding-top: 1;
-        color: #aaaaaa;
-    }
-
-    /* ============================================================
-       EVENT LOG
-       ============================================================ */
-
-    #event-title {
-        height: 1;
-        width: 100%;
-        background: #222222;
-        color: #ffffff;
-        text-style: bold;
-        padding-left: 1;
+        scrollbar-size: 0 0;
     }
 
     #event-log {
         height: 1fr;
-        border: solid #444444;
-        background: #000000;
-        padding: 1;
+        border: round #3d3226;
+        background: #100d0a;
+        padding: 0 2;
         color: #cccccc;
+        scrollbar-size: 0 0;
     }
 
-    /* ============================================================
-       MEMORY LOG
-       ============================================================ */
-
-    #memory-title {
-        height: 1;
-        width: 100%;
-        background: #222222;
-        color: #ffffff;
-        text-style: bold;
-        padding-left: 1;
-        margin-bottom: 1;
+    #right-column {
+        width: 34;
+        height: 100%;
+        padding: 1;
     }
 
     #memory-log {
         height: 1fr;
-        border: solid #444444;
-        background: #000000;
+        border: round #3d3226;
+        background: #100d0a;
         color: #999999;
-        padding: 1;
+        padding: 0 2;
+        scrollbar-size: 0 0;
     }
 
-    /* ============================================================
-       COMMAND CONSOLE
-       ============================================================ */
+    #controls {
+        height: 10;
+        margin-top: 1;
+        color: #8a7a63;
+    }
 
     #command-area {
-        height: 5;
-        width: 100%;
-        border: solid #ffffff;
-        background: #000000;
-        padding: 1;
+        dock: bottom;
+        height: 3;
+        padding: 0 2;
+        background: #1c1712;
+        border-top: solid #3d3226;
     }
 
-    #command-prompt {
-        width: 3;
+    #prompt {
+        width: 2;
         height: 3;
-        content-align: center middle;
-        color: #ffffff;
+        color: #ffb454;
         text-style: bold;
     }
 
@@ -318,33 +240,7 @@ class DaemonagotchiApp(App):
         width: 1fr;
         height: 3;
         border: none;
-        background: #000000;
-        color: #ffffff;
-    }
-
-    #cmd-input:focus {
-        border: none;
-    }
-
-    /* ============================================================
-       STATUS INFORMATION
-       ============================================================ */
-
-    #status-box {
-        height: 8;
-        width: 100%;
-        border: solid #444444;
-        padding: 1;
-        margin-top: 1;
-    }
-
-    #controls {
-        height: 5;
-        width: 100%;
-        border: solid #444444;
-        padding: 1;
-        margin-top: 1;
-        color: #777777;
+        background: transparent;
     }
     """
 
@@ -361,129 +257,75 @@ class DaemonagotchiApp(App):
         self.env_agent = None
         self.reset_requested = False
 
-    # ============================================================
-    # UI COMPOSITION
-    # ============================================================
-
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        with Horizontal(id="titlebar"):
+            yield Static("DAEMONAGOTCHI", id="app-title")
+            yield Static("", id="titlebar-info")
 
         with Horizontal(id="game"):
-
-            # ----------------------------------------------------
-            # LEFT: PET
-            # ----------------------------------------------------
-
             with Vertical(id="left-column"):
-                yield Static(" PET ", classes="section-title")
-
                 yield Static("", id="ascii-frame")
 
-                yield Static("UNKNOWN", id="pet-name")
+                yield Static("", id="gauge-hunger", classes="gauge")
+                yield Static("", id="gauge-energy", classes="gauge")
+                yield Static("", id="gauge-happiness", classes="gauge")
 
-                yield Static(
-                    "Waiting for simulation...",
-                    id="pet-description",
-                )
-
-                yield Static("HUNGER", classes="stat-name")
-                yield ProgressBar(
-                    total=100,
-                    show_percentage=True,
-                    id="hunger-bar",
-                )
-
-                yield Static("ENERGY", classes="stat-name")
-                yield ProgressBar(
-                    total=100,
-                    show_percentage=True,
-                    id="energy-bar",
-                )
-
-                yield Static("HAPPINESS", classes="stat-name")
-                yield ProgressBar(
-                    total=100,
-                    show_percentage=True,
-                    id="happiness-bar",
-                )
-
-                with Vertical(id="status-box"):
-                    yield Static("", id="pet-status")
-
-            # ----------------------------------------------------
-            # CENTER: WORLD + EVENTS
-            # ----------------------------------------------------
+                yield Static("", id="status-box")
 
             with Vertical(id="center-column"):
-                yield Static(" WORLD ", classes="section-title")
-
-                with Vertical(id="world-view"):
+                with Vertical(id="world-panel"):
                     yield Static("", id="world-map")
-                    yield Static("", id="location-info")
 
-                yield Static(" EVENT LOG ", id="event-title")
-                yield RichLog(
+                event_log = RichLog(
                     id="event-log",
                     highlight=True,
                     markup=True,
                     wrap=True,
                 )
-
-            # ----------------------------------------------------
-            # RIGHT: MEMORIES
-            # ----------------------------------------------------
+                event_log.border_title = f"[{DIM}]EVENT LOG[/]"
+                yield event_log
 
             with Vertical(id="right-column"):
-                yield Static(" MEMORIES ", id="memory-title")
-
-                yield RichLog(
+                memory_log = RichLog(
                     id="memory-log",
                     highlight=False,
                     markup=True,
                     wrap=True,
                 )
+                memory_log.border_title = f"[{DIM}]MEMORIES[/]"
+                yield memory_log
 
                 yield Static(
-                    """
-CONTROLS
-────────────────
-step
-create <thing>
-status
-reset
-exit
-
-CTRL+C   Quit
-CTRL+R   Reset
-""",
+                    f"[{DIM}]COMMANDS[/]\n"
+                    "  step             let it think\n"
+                    "  create <thing>   grow the world\n"
+                    "  status           redraw\n"
+                    "  reset            new life\n"
+                    "  exit             save + quit\n"
+                    f"\n[{DIM}]KEYS[/]\n"
+                    "  ctrl+r reset · ctrl+c quit",
                     id="controls",
                 )
 
-        # --------------------------------------------------------
-        # COMMAND LINE
-        # --------------------------------------------------------
-
         with Horizontal(id="command-area"):
-            yield Static("> ", id="command-prompt")
+            yield Static("❯", id="prompt")
             yield Input(
-                placeholder="Enter command...",
+                placeholder="enter a command...",
                 id="cmd-input",
             )
 
-        yield Footer()
-
-    # ============================================================
-    # STARTUP
-    # ============================================================
-
     def on_mount(self) -> None:
-        event_log = self.query_one("#event-log", RichLog)
+        log = self.query_one("#event-log", RichLog)
+
+        self.set_interval(1.0, self.update_clock)
+        self.update_clock()
 
         api_key = os.environ.get("GROQ_API_KEY")
 
         if not api_key:
-            event_log.write(
-                "[bold]ERROR[/bold]  GROQ_API_KEY is missing."
+            log.write(
+                f"[{BAD}]✖ GROQ_API_KEY is missing.[/] "
+                f"[{DIM}]Export it and restart.[/]"
             )
             return
 
@@ -500,16 +342,16 @@ CTRL+R   Reset
             self.env_agent = EnvironmentAgent(client)
 
         except Exception as exc:
-            event_log.write(
-                f"[bold]ERROR[/bold]  Failed to initialise AI: {exc}"
+            log.write(
+                f"[{BAD}]✖ Failed to initialise AI:[/] {exc}"
             )
             return
 
         self.engine = load_game()
 
         if not self.engine:
-            event_log.write(
-                "[bold]SYSTEM[/bold]  Configure your new pet."
+            log.write(
+                f"[{DIM}]▸ No save found — configure your new pet.[/]"
             )
 
             self.push_screen(
@@ -519,13 +361,25 @@ CTRL+R   Reset
 
             return
         else:
-            event_log.write(
-                "[bold]SYSTEM[/bold]  Save loaded."
-            )
+            log.write(f"[{DIM}]▸ Save loaded.[/]")
 
         self.refresh_ui()
 
         self.query_one("#cmd-input", Input).focus()
+
+    def update_clock(self) -> None:
+        info = datetime.now().strftime("%H:%M:%S")
+
+        if self.engine:
+            location = self.engine.world.locations[
+                self.engine.pet.current_location_id
+            ]
+            info = f"{location.name} · {info}"
+
+        self.query_one("#titlebar-info", Static).update(info)
+
+    def get_log(self) -> RichLog:
+        return self.query_one("#event-log", RichLog)
 
     def finish_pet_setup(
         self,
@@ -537,23 +391,21 @@ CTRL+R   Reset
 
         name, species = pet_details
 
-        log = self.query_one("#event-log", RichLog)
+        log = self.get_log()
 
         if self.reset_requested:
             if os.path.exists(SAVE_FILE):
                 os.remove(SAVE_FILE)
 
             log.clear()
-            log.write(
-                "[bold]SYSTEM[/bold]  World reset."
-            )
+            log.write(f"[{DIM}]▸ World reset.[/]")
 
             self.reset_requested = False
 
         self.engine = create_default_world(name, species)
 
         log.write(
-            f"[bold]SYSTEM[/bold]  Creating {name}, the {species}..."
+            f"[{DIM}]◌ Waking {name} the {species}...[/]"
         )
 
         self.run_worker(
@@ -569,10 +421,6 @@ CTRL+R   Reset
         self.refresh_ui()
         self.query_one("#cmd-input", Input).focus()
 
-    # ============================================================
-    # UI REFRESH
-    # ============================================================
-
     def refresh_ui(self) -> None:
         if not self.engine:
             return
@@ -583,9 +431,7 @@ CTRL+R   Reset
             pet.current_location_id
         ]
 
-        # --------------------------------------------------------
-        # ASCII ART
-        # --------------------------------------------------------
+        frame = self.query_one("#ascii-frame", Static)
 
         formatted_ascii = (
             pet.ascii_art
@@ -593,56 +439,25 @@ CTRL+R   Reset
             .replace('"', "")
         )
 
-        self.query_one(
-            "#ascii-frame",
-            Static,
-        ).update(formatted_ascii)
-
-        # --------------------------------------------------------
-        # PET INFORMATION
-        # --------------------------------------------------------
+        frame.update(formatted_ascii)
+        frame.border_title = f"{pet.name} the {pet.species}"
+        frame.border_subtitle = pet.mood
+        frame.styles.border_color = MOOD_COLORS.get(pet.mood, DIM)
 
         self.query_one(
-            "#pet-name",
-            Static,
-        ).update(
-            f"{pet.name.upper()}  //  {pet.species.upper()}"
-        )
+            "#gauge-hunger", Static
+        ).update(render_gauge("HUNGER", pet.hunger))
 
         self.query_one(
-            "#pet-description",
-            Static,
-        ).update(
-            f"Location: {current_location.name}\n"
-            f"Mood: {pet.mood}"
-        )
-
-        # --------------------------------------------------------
-        # STATS
-        # --------------------------------------------------------
+            "#gauge-energy", Static
+        ).update(render_gauge("ENERGY", pet.energy))
 
         self.query_one(
-            "#hunger-bar",
-            ProgressBar,
-        ).progress = pet.hunger
+            "#gauge-happiness", Static
+        ).update(render_gauge("JOY", pet.happiness))
 
         self.query_one(
-            "#energy-bar",
-            ProgressBar,
-        ).progress = pet.energy
-
-        self.query_one(
-            "#happiness-bar",
-            ProgressBar,
-        ).progress = pet.happiness
-
-        # --------------------------------------------------------
-        # STATUS
-        # --------------------------------------------------------
-
-        self.query_one(
-            "#pet-status",
-            Static,
+            "#status-box", Static
         ).update(
             f"NAME       {pet.name}\n"
             f"SPECIES    {pet.species}\n"
@@ -651,105 +466,54 @@ CTRL+R   Reset
             f"MEMORIES   {len(pet.memories)}"
         )
 
-        # --------------------------------------------------------
-        # WORLD
-        # --------------------------------------------------------
-
         self.refresh_world(current_location)
 
-        # --------------------------------------------------------
-        # MEMORIES
-        # --------------------------------------------------------
-
         memory_log = self.query_one(
-            "#memory-log",
-            RichLog,
+            "#memory-log", RichLog
         )
 
         memory_log.clear()
 
         if not pet.memories:
-            memory_log.write(
-                "[dim]No memories yet.[/dim]"
-            )
+            memory_log.write(f"[{DIM}]No memories yet.[/]")
         else:
             for memory in pet.memories:
-                memory_log.write(
-                    f"[dim]•[/dim] {memory}"
-                )
-
-    # ============================================================
-    # WORLD DISPLAY
-    # ============================================================
+                memory_log.write(f"[{DIM}]•[/] {memory}")
 
     def refresh_world(self, location) -> None:
-        world_map = self.query_one(
-            "#world-map",
-            Static,
-        )
-
-        location_info = self.query_one(
-            "#location-info",
-            Static,
-        )
-
-        # Current location
-        world_text = [
+        lines = [
             "",
-            f"        [bold][ {location.name.upper()} ][/bold]",
+            f"[bold {AMBER}]◈ {location.name.upper()}[/]",
             "",
-            f"        {location.description}",
+            f"  {location.description}",
             "",
         ]
 
-        # Objects
         if location.objects:
-            world_text.append("        OBJECTS")
-            world_text.append("        ───────")
+            lines.append(f"[{DIM}]OBJECTS[/]")
 
             for object_id in location.objects:
                 obj = self.engine.world.objects.get(object_id)
 
                 if obj:
-                    world_text.append(
-                        f"        [ ] {obj.name}"
-                    )
-
+                    lines.append(f"  ▸ {obj.name}")
         else:
-            world_text.append(
-                "        [dim]The area is empty.[/dim]"
-            )
+            lines.append(f"[{DIM}]nothing here but dust[/]")
 
-        world_text.append("")
+        lines.append("")
 
-        # Exits
         if location.exits:
-            world_text.append("        EXITS")
-            world_text.append("        ─────")
+            lines.append(f"[{DIM}]EXITS[/]")
 
             for direction, destination in location.exits.items():
-                destination_location = (
-                    self.engine.world.locations.get(destination)
-                )
+                dest = self.engine.world.locations.get(destination)
 
-                if destination_location:
-                    world_text.append(
-                        f"        -> {direction.upper():<7} "
-                        f"{destination_location.name}"
-                    )
+                if dest:
+                    lines.append(f"  → {direction} — {dest.name}")
 
-        world_map.update("\n".join(world_text))
-
-        # Location information
-        location_info.update(
-            f"CURRENT LOCATION\n"
-            f"{location.name}\n\n"
-            f"{location.description}"
+        self.query_one("#world-map", Static).update(
+            "\n".join(lines)
         )
-
-    # ============================================================
-    # COMMAND INPUT
-    # ============================================================
 
     def on_input_submitted(
         self,
@@ -759,8 +523,7 @@ CTRL+R   Reset
         command = event.value.strip()
 
         input_box = self.query_one(
-            "#cmd-input",
-            Input,
+            "#cmd-input", Input
         )
 
         input_box.value = ""
@@ -769,55 +532,31 @@ CTRL+R   Reset
         if not command:
             return
 
-        log = self.query_one(
-            "#event-log",
-            RichLog,
-        )
+        log = self.get_log()
 
-        # Show user's command
-        log.write(
-            f"[bold]> {command}[/bold]"
-        )
+        log.write(f"[bold]> {command}[/]")
 
         command_lower = command.lower()
-
-        # --------------------------------------------------------
-        # EXIT
-        # --------------------------------------------------------
 
         if command_lower == "exit":
             if self.engine:
                 save_game(self.engine)
 
-            log.write(
-                "[dim]Saving world... goodbye.[/dim]"
-            )
+            log.write(f"[{DIM}]Saving world... goodbye.[/]")
 
             self.exit()
             return
-
-        # --------------------------------------------------------
-        # RESET
-        # --------------------------------------------------------
 
         if command_lower in ("reset", "clear"):
             self.action_reset_game()
             return
 
-        # --------------------------------------------------------
-        # STEP
-        # --------------------------------------------------------
-
         if command_lower == "step":
             if not self.pet_agent:
-                log.write(
-                    "[bold]ERROR[/bold]  Pet AI is unavailable."
-                )
+                log.write(f"[{BAD}]✖ Pet AI is unavailable.[/]")
                 return
 
-            log.write(
-                "[dim]The pet is thinking...[/dim]"
-            )
+            log.write(f"[{DIM}]◌ The pet is thinking...[/]")
 
             self.run_worker(
                 self.async_step_pet,
@@ -827,28 +566,18 @@ CTRL+R   Reset
 
             return
 
-        # --------------------------------------------------------
-        # CREATE
-        # --------------------------------------------------------
-
         if command_lower.startswith("create "):
             prompt = command[7:].strip()
 
             if not prompt:
-                log.write(
-                    "[dim]Usage: create <description>[/dim]"
-                )
+                log.write(f"[{DIM}]Usage: create <description>[/]")
                 return
 
             if not self.env_agent:
-                log.write(
-                    "[bold]ERROR[/bold]  Environment AI unavailable."
-                )
+                log.write(f"[{BAD}]✖ Environment AI unavailable.[/]")
                 return
 
-            log.write(
-                f"[dim]World agent: {prompt}[/dim]"
-            )
+            log.write(f"[{DIM}]◌ World agent: {prompt}[/]")
 
             self.run_worker(
                 partial(
@@ -861,65 +590,35 @@ CTRL+R   Reset
 
             return
 
-        # --------------------------------------------------------
-        # STATUS
-        # --------------------------------------------------------
-
         if command_lower == "status":
             self.refresh_ui()
 
-            log.write(
-                "[dim]Interface refreshed.[/dim]"
-            )
+            log.write(f"[{DIM}]▸ Interface refreshed.[/]")
 
             return
-
-        # --------------------------------------------------------
-        # HELP
-        # --------------------------------------------------------
 
         if command_lower in ("help", "?"):
             log.write(
-                """
-[bold]COMMANDS[/bold]
-
-  step
-      Let the pet perceive its surroundings
-      and choose an action.
-
-  create <description>
-      Ask the environment agent to change
-      the world.
-
-  status
-      Refresh the interface.
-
-  reset
-      Destroy the current save and create
-      a new world.
-
-  exit
-      Save and exit.
-"""
+                f"[{WARN}]COMMANDS[/]\n\n"
+                "  step\n"
+                "      Let the pet perceive its surroundings\n"
+                "      and choose an action.\n\n"
+                "  create <description>\n"
+                "      Ask the environment agent to change\n"
+                "      the world.\n\n"
+                "  status\n"
+                "      Refresh the interface.\n\n"
+                "  reset\n"
+                "      Destroy the current save and create\n"
+                "      a new world.\n\n"
+                "  exit\n"
+                "      Save and exit."
             )
 
             return
 
-        # --------------------------------------------------------
-        # UNKNOWN COMMAND
-        # --------------------------------------------------------
-
-        log.write(
-            f"[bold]Unknown command:[/bold] {command}"
-        )
-
-        log.write(
-            "[dim]Type 'help' for available commands.[/dim]"
-        )
-
-    # ============================================================
-    # PET WORKER
-    # ============================================================
+        log.write(f"[{BAD}]Unknown:[/] {command}")
+        log.write(f"[{DIM}]Type 'help' for available commands.[/]")
 
     def async_step_pet(self):
         self.engine.tick()
@@ -950,10 +649,6 @@ CTRL+R   Reset
         save_game(self.engine)
         return ascii_art
 
-    # ============================================================
-    # ENVIRONMENT WORKER
-    # ============================================================
-
     def async_modify_world(
         self,
         prompt: str,
@@ -968,23 +663,12 @@ CTRL+R   Reset
 
         return result
 
-    # ============================================================
-    # WORKER EVENTS
-    # ============================================================
-
     def on_worker_state_changed(
         self,
         event: Worker.StateChanged,
     ) -> None:
 
-        log = self.query_one(
-            "#event-log",
-            RichLog,
-        )
-
-        # --------------------------------------------------------
-        # PET FINISHED
-        # --------------------------------------------------------
+        log = self.get_log()
 
         if (
             event.state == WorkerState.SUCCESS
@@ -996,25 +680,17 @@ CTRL+R   Reset
 
             pet_name = self.engine.pet.name
 
-            log.write(
-                f"[bold]THOUGHT[/bold]  {thought}"
-            )
+            log.write(f"[{WARN}]✦[/] {thought}")
 
             if dialogue:
                 log.write(
-                    f"[bold]{pet_name}:[/bold] "
-                    f"\"{dialogue}\""
+                    f"[{OK}]❝ {dialogue}[/] "
+                    f"[{DIM}]— {pet_name}[/]"
                 )
 
-            log.write(
-                f"[dim]{result}[/dim]"
-            )
+            log.write(f"[{DIM}]{result}[/]")
 
             self.refresh_ui()
-
-        # --------------------------------------------------------
-        # ENVIRONMENT FINISHED
-        # --------------------------------------------------------
 
         elif (
             event.state == WorkerState.SUCCESS
@@ -1022,50 +698,31 @@ CTRL+R   Reset
         ):
             result = event.worker.result
 
-            log.write(
-                f"[bold]WORLD[/bold]  {result}"
-            )
+            log.write(f"[{AMBER}]◆[/] {result}")
 
             self.refresh_ui()
-
-        # --------------------------------------------------------
-        # INITIAL PET FINISHED
-        # --------------------------------------------------------
 
         elif (
             event.state == WorkerState.SUCCESS
             and event.worker.name == "initialize_pet"
         ):
             log.write(
-                "[bold]SYSTEM[/bold]  Your pet has awakened."
+                f"[{OK}]✦ Your pet has awakened.[/]"
             )
             self.refresh_ui()
 
-        # --------------------------------------------------------
-        # WORKER FAILED
-        # --------------------------------------------------------
-
         elif event.state == WorkerState.ERROR:
             log.write(
-                f"[bold]WORKER ERROR[/bold]  "
+                f"[{BAD}]✖ worker failed:[/] "
                 f"{event.worker.error}"
             )
 
-    # ============================================================
-    # RESET
-    # ============================================================
-
     def action_reset_game(self) -> None:
-        log = self.query_one(
-            "#event-log",
-            RichLog,
-        )
+        log = self.get_log()
 
         self.reset_requested = True
         log.clear()
-        log.write(
-            "[bold]SYSTEM[/bold]  Choose your new pet."
-        )
+        log.write(f"[{DIM}]▸ Choose your new pet.[/]")
 
         self.push_screen(
             PetSetupScreen(),

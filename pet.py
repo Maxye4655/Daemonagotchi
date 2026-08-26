@@ -14,10 +14,6 @@ MODEL_NAME = "openai/gpt-oss-20b"
 SAVE_FILE = "pet_save.json"
 
 
-# ============================================================
-# WORLD
-# ============================================================
-
 @dataclass
 class WorldObject:
     id: str
@@ -70,10 +66,6 @@ class WorldMap:
             self.locations[loc2_id].exits[opposite_direction] = loc1_id
 
 
-# ============================================================
-# PET
-# ============================================================
-
 @dataclass
 class Pet:
     name: str
@@ -125,10 +117,6 @@ class Pet:
         else:
             self.mood = "Content"
 
-
-# ============================================================
-# SIMULATION ENGINE
-# ============================================================
 
 class SimulationEngine:
     def __init__(self, pet: Pet, world: WorldMap):
@@ -421,17 +409,8 @@ class SimulationEngine:
         return result
 
 
-# ============================================================
-# AI RESPONSE MODELS
-# ============================================================
-
 class PetDecision(BaseModel):
-    """
-    A deliberately flat schema.
-
-    This is much easier for Groq's structured-output system
-    to validate than a nested Union of multiple Pydantic models.
-    """
+    """Flat schema: easiest for Groq's strict structured outputs."""
 
     internal_thought: str = Field(
         description=(
@@ -535,10 +514,6 @@ class SpawnLocationAction(BaseModel):
         )
     )
 
-
-# ============================================================
-# PET AGENT
-# ============================================================
 
 class PetAgent:
 
@@ -755,10 +730,6 @@ If action_type is "wait":
         )
 
 
-# ============================================================
-# ENVIRONMENT AGENT
-# ============================================================
-
 class EnvironmentAgent:
 
     def __init__(self, client: instructor.Instructor):
@@ -838,10 +809,6 @@ USER REQUEST:
         )
 
 
-# ============================================================
-# SAVE
-# ============================================================
-
 def save_game(engine: SimulationEngine):
 
     data = {
@@ -907,10 +874,6 @@ def save_game(engine: SimulationEngine):
         SAVE_FILE,
     )
 
-
-# ============================================================
-# LOAD
-# ============================================================
 
 def load_game() -> Optional[SimulationEngine]:
 
@@ -1019,10 +982,6 @@ def load_game() -> Optional[SimulationEngine]:
 
         return None
 
-
-# ============================================================
-# DEFAULT WORLD
-# ============================================================
 
 def create_default_world(
     name: str = "Blob",
