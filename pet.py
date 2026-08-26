@@ -203,10 +203,6 @@ class SimulationEngine:
                 f"for {obj.name}."
             )
 
-        # --------------------------------------------------------
-        # FOOD
-        # --------------------------------------------------------
-
         if action == "eat" and object_id == "food_bowl":
             self.pet.hunger -= 35
             self.pet.happiness += 10
@@ -226,10 +222,6 @@ class SimulationEngine:
 
             return result
 
-        # --------------------------------------------------------
-        # BED
-        # --------------------------------------------------------
-
         if action == "sleep" and object_id == "bed":
             self.pet.energy += 40
 
@@ -246,10 +238,6 @@ class SimulationEngine:
             )
 
             return result
-
-        # --------------------------------------------------------
-        # GENERIC OBJECT
-        # --------------------------------------------------------
 
         result = (
             f"{self.pet.name} used "
@@ -269,10 +257,6 @@ class SimulationEngine:
             pet.current_location_id
         ]
 
-        # --------------------------------------------------------
-        # OBJECTS
-        # --------------------------------------------------------
-
         objects_list = []
 
         for obj_id in loc.objects:
@@ -291,19 +275,11 @@ class SimulationEngine:
             else "None"
         )
 
-        # --------------------------------------------------------
-        # EXITS
-        # --------------------------------------------------------
-
         exits_str = (
             ", ".join(loc.exits.keys())
             if loc.exits
             else "None"
         )
-
-        # --------------------------------------------------------
-        # MEMORIES
-        # --------------------------------------------------------
 
         memories_str = (
             "\n".join(
@@ -645,10 +621,6 @@ If action_type is "wait":
             )
         )
 
-        # --------------------------------------------------------
-        # EXECUTE ACTION
-        # --------------------------------------------------------
-
         if decision.action_type == "move":
 
             if not decision.direction:
@@ -704,10 +676,6 @@ If action_type is "wait":
 
         else:
             result = "No action executed."
-
-        # --------------------------------------------------------
-        # UPDATE PET
-        # --------------------------------------------------------
 
         engine.pet.update_mood()
 
@@ -891,10 +859,6 @@ def load_game() -> Optional[SimulationEngine]:
 
         world = WorldMap()
 
-        # --------------------------------------------------------
-        # LOCATIONS
-        # --------------------------------------------------------
-
         for loc_id, loc_data in (
             data["world"]["locations"].items()
         ):
@@ -908,10 +872,6 @@ def load_game() -> Optional[SimulationEngine]:
                     objects=loc_data.get("objects", []),
                 )
             )
-
-        # --------------------------------------------------------
-        # OBJECTS
-        # --------------------------------------------------------
 
         for obj_id, obj_data in (
             data["world"]["objects"].items()
@@ -929,10 +889,6 @@ def load_game() -> Optional[SimulationEngine]:
                     ),
                 )
             )
-
-        # --------------------------------------------------------
-        # PET
-        # --------------------------------------------------------
 
         pet_data = data["pet"]
 
@@ -990,10 +946,6 @@ def create_default_world(
 
     world = WorldMap()
 
-    # --------------------------------------------------------
-    # LOCATIONS
-    # --------------------------------------------------------
-
     house = Location(
         "house",
         "Inside House",
@@ -1017,10 +969,6 @@ def create_default_world(
         "west",
     )
 
-    # --------------------------------------------------------
-    # OBJECTS
-    # --------------------------------------------------------
-
     bowl = WorldObject(
         "food_bowl",
         "Food Bowl",
@@ -1039,10 +987,6 @@ def create_default_world(
 
     world.add_object(bowl)
     world.add_object(bed)
-
-    # --------------------------------------------------------
-    # PET
-    # --------------------------------------------------------
 
     pet = Pet(
         name=name,
